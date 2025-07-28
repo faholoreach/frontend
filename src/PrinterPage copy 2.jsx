@@ -129,40 +129,19 @@ function App() {
 
     // 프린터 종류에 따라 다른 인쇄 함수 호출
     if (printerInfo.value.startsWith('SATO_')) {
-      const ESC = '\x1B';
-      let sbplCommand = '';
-        sbplCommand += ESC + 'A';
-        sbplCommand += ESC + 'V0100';
-        sbplCommand += ESC + 'H0400';
-        sbplCommand += ESC + 'L0202';
-        sbplCommand += ESC + '00PDF Manual Success!'; // 테스트 텍스트
-        sbplCommand += ESC + 'V0100';
-        sbplCommand += ESC + 'H0400';
-        sbplCommand += ESC + 'B1031001234567890';
-        sbplCommand += ESC + 'Q1';
-        sbplCommand += ESC + 'Z';
-
-      const base64Data = btoa(sbplCommand);
-
       const printJob = {
-        "Method": "Driver.SendRawData",
-        "Parameters": {
-          "DriverName": printerInfo.driverName,
-          "Data": base64Data
-        }
+        "Method": "Raw.Print",
+        "DriverName": printerInfo.DriverName,
+        "PortName": printerInfo.PortName,
+        "Data": "^XA^FO50,50^A0N,50,50^FDTest Print SATO^FS^XZ" // 테스트 ZPL 데이터
       };
       connectAndPrintSato(printJob);
     } else if (printerInfo.value.startsWith('ZEBRA_')) {
       const selectedDevice = zebraDeviceList.current.find(d => d.uid === printerInfo.uid);
       if (selectedDevice) {
         setStatus({ message: 'ZEBRA 프린터로 인쇄 명령을 전송합니다...', color: 'orange' });
-        // ZPL (Zebra Programming Language) 명령어 생성
-        let zplCommand = '';
-        zplCommand += '^XA'; // 인쇄 시작
-        zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
-        zplCommand += '^FO50,100^BY2^BCN,100,Y,N,N^FD1234567890^FS'; // 바코드
-        zplCommand += '^XZ'; // 인쇄 종료
-        selectedDevice.send(zplCommand,
+        const zplData = "^XA^FO50,50^A0N,50,50^FDTest Print ZEBRA^FS^XZ";
+        selectedDevice.send(zplData,
           () => setStatus({ message: 'ZEBRA 프린터에서 성공적으로 인쇄했습니다!', color: 'green' }),
           (error) => setStatus({ message: `ZEBRA 인쇄 오류: ${error}`, color: 'red' })
         );
@@ -180,7 +159,6 @@ function App() {
     setStatus({ message: 'SATO 프린터에 인쇄 명령을 전송합니다...', color: 'orange' });
 
     printSocket.onopen = () => {
-      setStatus({ message: 'SATO 프린터에 연결되었습니다..', color: 'green' });
       printSocket.send(JSON.stringify(printJob));
     };
 
@@ -246,13 +224,7 @@ function App() {
           disabled={printers.length === 0}
           style={{ marginBottom: '20px', padding: '8px', minWidth: '300px' }}
         >
-          <option value="" disabled>-- 프린터를 선택하세요 --</option>
-            {printers.map((printer) => (
-            <option key={printer.value} value={printer.value}>
-              {printer.label}
-            </option>
-            ))}
-          {/* {printers.length === 0 ? (
+          {printers.length === 0 ? (
             <option value="">사용 가능한 프린터 없음</option>
           ) : (
             printers.map((printer) => (
@@ -260,7 +232,7 @@ function App() {
                 {printer.label}
               </option>
             ))
-          )} */}
+          )}
         </select>
         <button onClick={handlePrintTest} disabled={!selectedPrinter} style={{ padding: '10px 20px', cursor: 'pointer' }}>
           테스트 프린터 인쇄
