@@ -5,88 +5,78 @@ import './App.css';
 const SATO_WEBSOCKET_URL = "ws://localhost:8055/SATOPrinterAPI";
 
 function App() {
+  // 개별 프린터 목록과 합쳐진 목록을 위한 상태
+  const [satoPrinters, setSatoPrinters] = useState([]);
+  const [zebraPrinters, setZebraPrinters] = useState([]);
   const [printers, setPrinters] = useState([]);
+  
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [status, setStatus] = useState({ message: '프린터를 찾는 중...', color: 'orange' });
   const socketRef = useRef(null);
-  const zebraDeviceList = useRef([]); // ZEBRA 장치 전체 목록을 저장하기 위한 Ref
+  const zebraDeviceList = useRef([]); // ZEBRA 장치 전체 목록 저장
 
-  /**
-   * SATO 프린터 목록을 가져오는 비동기 함수
-   */
-  const getSatoPrinterList = () => {
-    return new Promise((resolve) => {
-      const connectWebSocket = (onOpenCallback) => {
-        if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
-          onOpenCallback(socketRef.current);
-          return;
+  // SATO 웹소켓 연결 및 이벤트 핸들러 설정
+  const setupSatoSocket = () => {
+    // 이미 연결이 설정되어 있으면 중복 실행 방지
+    if (socketRef.current) return;
+
+    setStatus({ message: 'SATO 프린터 서버에 연결을 시도합니다...', color: 'orange' });
+    const socket = new WebSocket(SATO_WEBSOCKET_URL);
+    socketRef.current = socket;
+
+    socket.onopen = () => {
+      console.log("SATO WebSocket Connection established.");
+      setStatus({ message: 'SATO 프린터에 연결되었습니다. 목록을 요청합니다...', color: 'green' });
+      // 연결 성공 시 프린터 목록 요청
+      const getListJob = { "Method": "Driver.GetDriverList" };
+      socket.send(JSON.stringify(getListJob));
+    };
+
+    socket.onmessage = (event) => {
+      console.log(`[SATO Message from Server] ${event.data}`);
+      try {
+        const response = JSON.parse(event.data);
+        // 응답이 배열이면 프린터 목록으로 간주
+        if (Array.isArray(response)) {
+          const formattedList = response.map(printer => ({
+            value: `SATO_${printer.PortName}`,
+            label: `SATO: ${printer.DriverName}`,
+            driverName: printer.DriverName,
+            portName: printer.PortName,
+          }));
+          setSatoPrinters(formattedList);
+        } 
+        // 인쇄 결과 응답 처리
+        else if (response.Result === "Executed" || response.Status === "Success" || (typeof response === 'boolean' && response)) {
+          setStatus({ message: 'SATO 프린터로 성공적으로 인쇄했습니다!', color: 'green' });
+        } else if (response.Error) {
+          setStatus({ message: `SATO 오류: ${response.Error}`, color: 'red' });
         }
+      } catch (e) {
+        if (event.data.toLowerCase() === "true") {
+          setStatus({ message: 'SATO 프린터로 성공적으로 인쇄했습니다!', color: 'green' });
+        } else {
+          console.log("Received non-JSON message from SATO:", event.data);
+        }
+      }
+    };
 
-        setStatus({ message: 'SATO 프린터 서버에 연결을 시도합니다...', color: 'orange' });
-        const newSocket = new WebSocket(SATO_WEBSOCKET_URL);
+    socket.onclose = (event) => {
+      if (!event.wasClean) {
+        setStatus({ message: 'SATO 프린터 연결이 끊어졌습니다. SATO All-In-One Tool을 확인하세요.', color: 'red' });
+      }
+      console.log("SATO WebSocket Connection closed.");
+      socketRef.current = null;
+    };
 
-        newSocket.onopen = () => {
-          setStatus({ message: 'SATO 프린터에 성공적으로 연결되었습니다.', color: 'green' });
-          console.log("SATO WebSocket Connection established.");
-          if (onOpenCallback) {
-            onOpenCallback(newSocket);
-          }
-        };
-
-        newSocket.onmessage = (event) => {
-          console.log(`[SATO Message from Server] ${event.data}`);
-          try {
-            const response = JSON.parse(event.data);
-            console.log("Parsed SATO server response:", response);
-
-            if (Array.isArray(response)) {
-              const formattedList = response.map(printer => ({
-                value: `SATO_${printer.PortName}`,
-                label: `SATO: ${printer.DriverName}`,
-              }));
-              setStatus({ message: 'SATO 프린터 목록을 성공적으로 가져왔습니다.', color: 'green' });
-              resolve(formattedList); // Promise를 프린터 목록으로 resolve
-            }
-            // 다른 메시지 처리 로직은 여기서는 생략합니다.
-          } catch (e) {
-            console.log("Received non-JSON message from SATO:", event.data);
-          }
-        };
-
-        newSocket.onclose = (event) => {
-          if (!event.wasClean) {
-            setStatus({ message: 'SATO 프린터 연결이 끊어졌습니다. SATO All-In-One Tool을 확인하세요.', color: 'red' });
-          }
-          console.log("SATO WebSocket Connection closed.");
-          socketRef.current = null;
-          resolve([]); // 연결 실패 시 빈 배열로 resolve
-        };
-
-        newSocket.onerror = (error) => {
-          setStatus({ message: 'SATO 연결 오류. SATO All-In-One Tool 실행을 확인해주세요.', color: 'red' });
-          console.error("SATO WebSocket Error:", error);
-          socketRef.current = null;
-          resolve([]); // 오류 발생 시 빈 배열로 resolve
-        };
-
-        socketRef.current = newSocket;
-      };
-
-      const requestPrinterList = (socket) => {
-        const getListJob = { "Method": "Driver.GetDriverList" };
-        socket.send(JSON.stringify(getListJob));
-        console.log("Requesting SATO Printer List:", getListJob);
-        setStatus({ message: 'SATO 프린터 목록을 요청하는 중...', color: 'orange' });
-      };
-
-      // 웹소켓에 연결하고 연결이 성공하면 프린터 목록을 요청합니다.
-      connectWebSocket(requestPrinterList);
-    });
+    socket.onerror = (error) => {
+      setStatus({ message: 'SATO 연결 오류. SATO All-In-One Tool 실행을 확인해주세요.', color: 'red' });
+      console.error("SATO WebSocket Error:", error);
+      socketRef.current = null;
+    };
   };
 
-  /**
-   * ZEBRA 프린터 목록을 가져오는 비동기 함수
-   */
+  // ZEBRA 프린터 목록을 가져오는 비동기 함수
   const getZebraPrinterList = () => {
     return new Promise((resolve) => {
       if (!window.BrowserPrint) {
@@ -95,55 +85,57 @@ function App() {
       }
       window.BrowserPrint.getLocalDevices(
         (deviceList) => {
-          zebraDeviceList.current = deviceList; // 나중에 send() 메소드를 사용하기 위해 전체 목록 저장
+          zebraDeviceList.current = deviceList;
           const formattedList = deviceList.map(device => ({
             value: `ZEBRA_${device.uid}`,
             label: `ZEBRA: ${device.name}`,
             uid: device.uid
           }));
-          resolve(formattedList);
+          setZebraPrinters(formattedList);
+          resolve();
         },
         () => {
           console.error("로컬 프린터를 가져오는 데 실패했습니다.");
-          resolve([]);
+          resolve();
         },
         "printer"
       );
     });
   };
 
-  /**
-   * 테스트 인쇄 버튼 클릭 이벤트 핸들러
-   */
+  // 테스트 인쇄 버튼 클릭 핸들러
   const handlePrintTest = () => {
     if (!selectedPrinter) {
-      alert("먼저 프린터를 선택해주세요.");
+      alert("프린터를 선택해주세요.");
       return;
     }
-
+    
     const printerInfo = printers.find(p => p.value === selectedPrinter);
     if (!printerInfo) {
-      alert("선택된 프린터 정보를 찾을 수 없습니다.");
-      return;
+        alert("선택된 프린터 정보를 찾을 수 없습니다.");
+        return;
     }
 
-    // 프린터 종류에 따라 다른 인쇄 함수 호출
-    if (printerInfo.value.startsWith('SATO_')) {
+    if (selectedPrinter.startsWith('SATO_')) {
+      if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
+        setStatus({ message: 'SATO 프린터가 연결되지 않았습니다. 다시 시도해주세요.', color: 'red' });
+        // 재연결 시도
+        setupSatoSocket();
+        return;
+      }
       const ESC = '\x1B';
       let sbplCommand = '';
-        sbplCommand += ESC + 'A';
-        sbplCommand += ESC + 'V0100';
-        sbplCommand += ESC + 'H0400';
-        sbplCommand += ESC + 'L0202';
-        sbplCommand += ESC + '00PDF Manual Success!'; // 테스트 텍스트
-        sbplCommand += ESC + 'V0100';
-        sbplCommand += ESC + 'H0400';
-        sbplCommand += ESC + 'B1031001234567890';
-        sbplCommand += ESC + 'Q1';
-        sbplCommand += ESC + 'Z';
-
+      sbplCommand += ESC + 'A';
+      sbplCommand += ESC + 'V0100';
+      sbplCommand += ESC + 'H0400';
+      sbplCommand += ESC + 'L0202';
+      sbplCommand += ESC + '00PDF Manual Success!'; // 테스트 텍스트
+      sbplCommand += ESC + 'V0100';
+      sbplCommand += ESC + 'H0400';
+      sbplCommand += ESC + 'B1031001234567890';
+      sbplCommand += ESC + 'Q1';
+      sbplCommand += ESC + 'Z';
       const base64Data = btoa(sbplCommand);
-
       const printJob = {
         "Method": "Driver.SendRawData",
         "Parameters": {
@@ -151,12 +143,12 @@ function App() {
           "Data": base64Data
         }
       };
-      connectAndPrintSato(printJob);
-    } else if (printerInfo.value.startsWith('ZEBRA_')) {
-      const selectedDevice = zebraDeviceList.current.find(d => d.uid === printerInfo.uid);
+      setStatus({ message: 'SATO 프린터에 인쇄 명령을 전송합니다...', color: 'orange' });
+      socketRef.current.send(JSON.stringify(printJob));
+    } else if (selectedPrinter.startsWith('ZEBRA_')) {
+      const selectedDevice = zebraDeviceList.current.find(device => device.uid === printerInfo.uid);
       if (selectedDevice) {
-        setStatus({ message: 'ZEBRA 프린터로 인쇄 명령을 전송합니다...', color: 'orange' });
-        // ZPL (Zebra Programming Language) 명령어 생성
+        setStatus({ message: 'ZEBRA 프린터로 인쇄 명령을 전송했습니다...', color: 'orange' });
         let zplCommand = '';
         zplCommand += '^XA'; // 인쇄 시작
         zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
@@ -172,59 +164,10 @@ function App() {
     }
   };
 
-  /**
-   * SATO 프린터 인쇄를 위한 웹소켓 연결 및 전송 함수
-   */
-  const connectAndPrintSato = (printJob) => {
-    const printSocket = new WebSocket(SATO_WEBSOCKET_URL);
-    setStatus({ message: 'SATO 프린터에 인쇄 명령을 전송합니다...', color: 'orange' });
-
-    printSocket.onopen = () => {
-      setStatus({ message: 'SATO 프린터에 연결되었습니다..', color: 'green' });
-      printSocket.send(JSON.stringify(printJob));
-    };
-
-    printSocket.onmessage = (event) => {
-      try {
-        const response = JSON.parse(event.data);
-        if (response.Result === "Executed" || response.Status === "Success" || (typeof response === 'boolean' && response)) {
-          setStatus({ message: 'SATO 프린터로 성공적으로 인쇄했습니다!', color: 'green' });
-        } else if (response.Error) {
-          setStatus({ message: `SATO 오류: ${response.Error}`, color: 'red' });
-        }
-      } catch (e) {
-        // 성공 시 'true' 문자열만 오는 경우 처리
-        if (event.data.toLowerCase() === "true") {
-           setStatus({ message: 'SATO 프린터로 성공적으로 인쇄했습니다!', color: 'green' });
-        }
-      }
-      printSocket.close();
-    };
-
-    printSocket.onerror = () => {
-      setStatus({ message: 'SATO 프린터 연결에 실패했습니다.', color: 'red' });
-    };
-  };
-
+  // 컴포넌트 마운트 시 프린터 목록 조회 시작
   useEffect(() => {
-    const fetchPrinters = async () => {
-      setStatus({ message: '모든 프린터 목록을 가져오는 중...', color: 'orange' });
-      const results = await Promise.allSettled([getSatoPrinterList(), getZebraPrinterList()]);
-
-      const satoPrinters = results[0].status === 'fulfilled' ? results[0].value : [];
-      const zebraPrinters = results[1].status === 'fulfilled' ? results[1].value : [];
-      const combinedPrinters = [...satoPrinters, ...zebraPrinters];
-      setPrinters(combinedPrinters);
-
-      if (combinedPrinters.length > 0) {
-        setSelectedPrinter(combinedPrinters[0].value);
-        setStatus({ message: '프린터 목록을 성공적으로 가져왔습니다.', color: 'green' });
-      } else {
-        setStatus({ message: '사용 가능한 프린터를 찾을 수 없습니다. SATO All-in-One Tool 또는 Zebra Browser Print가 실행 중인지 확인하세요.', color: 'red' });
-      }
-    };
-
-    fetchPrinters();
+    setupSatoSocket();
+    getZebraPrinterList();
 
     return () => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -233,26 +176,40 @@ function App() {
     };
   }, []);
 
+  // SATO 또는 ZEBRA 프린터 목록이 변경될 때마다 전체 목록 업데이트
+  useEffect(() => {
+    const combinedPrinters = [...satoPrinters, ...zebraPrinters];
+    setPrinters(combinedPrinters);
+
+    if (combinedPrinters.length > 0) {
+      // 현재 선택된 프린터가 목록에 없거나, 선택된 프린터가 없다면 첫 번째 항목을 선택
+      const isSelectedPrinterValid = combinedPrinters.some(p => p.value === selectedPrinter);
+      if (!selectedPrinter || !isSelectedPrinterValid) {
+        setSelectedPrinter(combinedPrinters[0].value);
+      }
+      setStatus({ message: '프린터 목록을 성공적으로 가져왔습니다.', color: 'green' });
+    } else {
+      // 두 목록이 모두 비어있을 때만 메시지 표시
+      if(satoPrinters.length === 0 && zebraPrinters.length === 0) {
+        setStatus({ message: '사용 가능한 프린터를 찾을 수 없습니다.', color: 'red' });
+      }
+    }
+  }, [satoPrinters, zebraPrinters]);
+
   return (
     <div className="App">
       <header className="App-header">
         <h2>프린터 선택</h2>
-        <div style={{ color: status.color, margin: '10px 0', minHeight: '24px' }}>
+        <div style={{ color: status.color, margin: '10px 0', minHeight: '24px', transition: 'color 0.3s' }}>
           {status.message}
         </div>
         <select
           value={selectedPrinter}
           onChange={(e) => setSelectedPrinter(e.target.value)}
           disabled={printers.length === 0}
-          style={{ marginBottom: '20px', padding: '8px', minWidth: '300px' }}
+          style={{ marginBottom: '20px', padding: '8px', minWidth: '300px', borderRadius: '4px' }}
         >
-          <option value="" disabled>-- 프린터를 선택하세요 --</option>
-            {printers.map((printer) => (
-            <option key={printer.value} value={printer.value}>
-              {printer.label}
-            </option>
-            ))}
-          {/* {printers.length === 0 ? (
+          {printers.length === 0 ? (
             <option value="">사용 가능한 프린터 없음</option>
           ) : (
             printers.map((printer) => (
@@ -260,9 +217,13 @@ function App() {
                 {printer.label}
               </option>
             ))
-          )} */}
+          )}
         </select>
-        <button onClick={handlePrintTest} disabled={!selectedPrinter} style={{ padding: '10px 20px', cursor: 'pointer' }}>
+        <button 
+          onClick={handlePrintTest} 
+          disabled={!selectedPrinter}
+          style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#61dafb', color: '#282c34', fontSize: '16px' }}
+        >
           테스트 프린터 인쇄
         </button>
       </header>
