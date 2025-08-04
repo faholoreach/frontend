@@ -188,8 +188,9 @@ function App() {
         sbplCommand += ESC + 'A'; // 인쇄 시작
         sbplCommand += ESC + 'A3H001V001'; // 인쇄 기준 위치 설정
         sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890'; // 텍스트 인쇄
-        sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `BQ2,M2,L,${qrData}`;
-        // sbplCommand += ESC + '%2' + ESC + 'H0500' + ESC + 'V0120' + ESC + `2D30,L,02,0,${qrData.length},${qrData}`;
+        // sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `BQ2,M2,L,${qrData}`;
+        sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `2D30,L,02,0,${qrData.length}`;
+        sbplCommand += ESC + `DS2${qrData}`;
         sbplCommand += ESC + `Q${printQuantity}`; // 인쇄 매수 설정
         sbplCommand += ESC + 'Z'; // 인쇄 종료
         // let sbplCommand = `${ESC}A${ESC}H0100${ESC}V0100${ESC}BQ3010,112345${qrData}${ESC}Q${printQuantity}${ESC}Z`;
@@ -201,8 +202,13 @@ function App() {
         sendSatoJob(printJob);
     } else if (selectedPrinter.startsWith('ZEBRA_')) {
         // QR코드 ZPL 명령어: ^BQN,2,크기^FD데이터^FS
-        const zplData = `^XA^FO50,50^BQN,2,4^FDQA,${qrData}^FS^XZ`;
-        sendZebraJob(zplData);
+        let zplCommand = '';
+        zplCommand += '^XA'; // 인쇄 시작
+        zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
+        zplCommand += `^FO50,50^BQN,2,4^FDQA,${qrData}^FS`; // 바코드
+        zplCommand += '^XZ'; // 인쇄 종료
+        // const zplData = `^XA^FO50,50^BQN,2,4^FDQA,${qrData}^FS^XZ`;
+        sendZebraJob(zplCommand);
     }
   };
 
@@ -224,7 +230,7 @@ function App() {
       setZebraStatus({ message: '인쇄 명령 전송 중...', status: 'pending' });
       for (let i = 0; i < printQuantity; i++) {
           selectedDevice.send(zplData,
-            () => setZebraStatus({ message: `인쇄 성공! (${i + 1}/${printQuantity})`, status: 'success' }),
+            () => setZebraStatus({ message: `인쇄 성공! (${printQuantity})`, status: 'success' }),
             (error) => setZebraStatus({ message: `인쇄 오류: ${error}`, status: 'error' })
           );
       }
