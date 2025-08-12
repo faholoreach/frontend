@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+// import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
+import PrinterStatus from './PrinterStatus';
 
 // SATO 프린터 웹소켓 URL
 const SATO_WEBSOCKET_URL = "ws://localhost:8055/SATOPrinterAPI";
@@ -40,7 +42,8 @@ function App() {
   
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [printQuantity, setPrintQuantity] = useState(1);
-  const [qrData, setQrData] = useState('https://www.google.com'); // QR코드 데이터 상태 추가
+  // const [qrData, setQrData] = useState('https://www.google.com'); // QR코드 데이터 상태 추가
+  const [qrData, setQrData] = '0123456789'; // QR코드 데이터 상태 추가
   
   const [satoStatus, setSatoStatus] = useState({ message: '대기 중...', status: 'pending' });
   const [zebraStatus, setZebraStatus] = useState({ message: '대기 중...', status: 'pending' });
@@ -48,6 +51,23 @@ function App() {
   const socketRef = useRef(null);
   const zebraDeviceList = useRef([]);
   const pendingSatoPrintJob = useRef(null);
+
+  // const {
+  //       loading,
+  //       loaded,
+  //       error,
+  //       loadStatus,
+  //       testResult,
+  //       loadLibrary,
+  //       testConnection,
+  //       refreshStatus
+  //   } = useBrowserPrintLoader();
+
+  //   useEffect(() => {
+  //       loadLibrary();
+
+  //       testConnection();
+  //   }, [loadLibrary]);
 
   const setupSatoSocket = () => {
     if (socketRef.current && socketRef.current.readyState < 2) return;
@@ -189,9 +209,11 @@ function App() {
         sbplCommand += ESC + 'A3H001V001'; // 인쇄 기준 위치 설정
         sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890'; // 텍스트 인쇄
         // sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `BQ2,M2,L,${qrData}`;
-        sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `2D30,L,02,0,${qrData.length}`;
-        sbplCommand += ESC + `DS2${qrData}`;
-        sbplCommand += ESC + `Q${printQuantity}`; // 인쇄 매수 설정
+        // sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `2D30,L,02,0,${qrData.length}`;
+        sbplCommand += ESC + 'V0100' + ESC + 'H0500' + ESC + `2D20,2,003,081,123456789`;  //테스트 인쇄 성공.
+        sbplCommand += ESC + `DS0010,${qrData}`;
+        // sbplCommand += ESC + `Q${printQuantity}`; // 인쇄 매수 설정
+        sbplCommand += ESC + 'Q1';
         sbplCommand += ESC + 'Z'; // 인쇄 종료
         // let sbplCommand = `${ESC}A${ESC}H0100${ESC}V0100${ESC}BQ3010,112345${qrData}${ESC}Q${printQuantity}${ESC}Z`;
         const base64Data = btoa(sbplCommand);
@@ -239,7 +261,6 @@ function App() {
     }
   };
 
-
   useEffect(() => {
     setupSatoSocket();
     getZebraPrinterList();
@@ -262,8 +283,10 @@ function App() {
       }
     }
   }, [satoPrinters, zebraPrinters]);
+  
 
   return (
+    
     <div className="App">
       <header className="App-header">
         <h2>프린터 연결 상태</h2>
@@ -296,7 +319,7 @@ function App() {
             style={{ padding: '8px', width: '80px', borderRadius: '4px' }}
           />
         </div>
-        <div style={{ marginBottom: '20px', width: '300px' }}>
+        {/* <div style={{ marginBottom: '20px', width: '300px' }}>
             <label htmlFor="qrData" style={{ marginRight: '10px' }}>QR 데이터:</label>
             <input
                 id="qrData"
@@ -305,7 +328,7 @@ function App() {
                 onChange={(e) => setQrData(e.target.value)}
                 style={{ padding: '8px', width: '200px', borderRadius: '4px' }}
             />
-        </div>
+        </div> */}
         <div style={{display: 'flex', gap: '10px'}}>
             <button 
               onClick={handlePrintTest} 
@@ -314,16 +337,59 @@ function App() {
             >
               텍스트/바코드 테스트
             </button>
-            <button 
+            {<button 
               onClick={handlePrintQRTest} 
               disabled={!selectedPrinter}
               style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#61dafb', color: '#282c34', fontSize: '16px' }}
             >
               QR코드 테스트 인쇄
-            </button>
+            </button>}
+        </div>
+        
+        {/* <selectBox
+          placeholder={'바코드 유형 선택'}
+          showClearButton={true}
+          displayExpr='text'
+          valueExpr='value'
+          value={printState.barcdTypeCd}
+          items={[
+            {value: 'N', text: '일차원바코드'},
+            {value: 'QR', text: 'QR바코드'},
+          ]}
+          onValueChanged={(e) => {
+            setPrintState((prevState) => ({
+              ...prevState,
+              sizeCd: e.value,
+            }));
+          }}
+          />
+
+          <selectBox
+          placeholder={'사이즈 선택'}
+          displayExpr='text'
+          valueExpr='value'
+          value={printState.sizeCd}
+          items={[
+            {value: 'Normal', text: '일반1'},
+            {value: 'Normal', text: '일반2'},
+            {value: 'Normal', text: '일반3'},
+            {value: 'Small', text: '축약'},
+            {value: 'XSmall', text: '초소'},
+            {value: 'XXSmall', text: '극소'},
+          ]}
+          onValueChanged={(e) => {
+            setPrintState((prevState) => ({
+              ...prevState,
+              sizeCd: e.value,
+            }));
+          }}
+          /> */}
+        <div>
+          <PrinterStatus />
         </div>
       </header>
     </div>
+    
   );
 }
 
