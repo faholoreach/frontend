@@ -1,16 +1,22 @@
 import React, { useEffect } from 'react';
-// import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
+import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
 
-const PrinterStatus = ({
-    loading,
-    loaded,
-    error,
-    loadStatus,
-    testResult,
-    loadLibrary,
-    testConnection,
-    refreshStatus
-}) => {
+const PrinterStatus = () => {
+    const {
+        loading,
+        loaded,
+        error,
+        loadStatus,
+        testResult,
+        loadLibrary,
+        testConnection,
+        refreshStatus
+    } = useBrowserPrintLoader();
+
+    useEffect(() => {
+        loadLibrary();
+    }, [loadLibrary]);
+
     const containerStyle = {
         padding: '20px',
         maxWidth: '600px',
@@ -143,7 +149,7 @@ const PrinterStatus = ({
                     <button
                         style={primaryButtonStyle}
                         onClick={loadLibrary}
-                        // disabled={loading}
+                        disabled={loading}
                     >
                         {loaded ? '재로드' : '라이브러리 로드'}
                     </button>
@@ -151,7 +157,7 @@ const PrinterStatus = ({
                     <button
                         style={successButtonStyle}
                         onClick={testConnection}
-                        // disabled={loading || !loaded}
+                        disabled={loading || !loaded}
                     >
                         연결 테스트
                     </button>
@@ -159,7 +165,7 @@ const PrinterStatus = ({
                     <button
                         style={buttonStyle}
                         onClick={refreshStatus}
-                        // disabled={loading}
+                        disabled={loading}
                     >
                         상태 새로고침
                     </button>

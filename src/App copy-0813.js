@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
+// import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
 import PrinterStatus from './PrinterStatus';
 
 // SATO 프린터 웹소켓 URL
@@ -52,42 +52,22 @@ function App() {
   const zebraDeviceList = useRef([]);
   const pendingSatoPrintJob = useRef(null);
 
-  // ZEBRA 프린터 관련 상태와 함수를 App.js에서 직접 관리합니다.
-  const {
-      loading: zebraLoading,
-      loaded: zebraLoaded,
-      error: zebraError,
-      loadStatus,
-      testResult,
-      loadLibrary,
-      testConnection,
-      refreshStatus
-  } = useBrowserPrintLoader();
+  // const {
+  //       loading,
+  //       loaded,
+  //       error,
+  //       loadStatus,
+  //       testResult,
+  //       loadLibrary,
+  //       testConnection,
+  //       refreshStatus
+  //   } = useBrowserPrintLoader();
 
-  // ZEBRA 프린터 연결 테스트 결과가 변경될 때마다 프린터 목록을 업데이트합니다.
-  useEffect(() => {
-    if (zebraError) {
-      setZebraStatus({ message: `오류: ${zebraError}`, status: 'error' });
-      return;
-    }
-    if (zebraLoading) {
-        setZebraStatus({ message: '프린터 확인 중...', status: 'pending' });
-        return;
-    }
-    if (testResult && testResult.devices) {
-      const deviceList = testResult.devices;
-      zebraDeviceList.current = deviceList;
-      const formattedList = deviceList.map(device => ({
-        value: `ZEBRA_${device.uid}`,
-        label: `ZEBRA: ${device.name}`,
-        uid: device.uid
-      }));
-      setZebraPrinters(formattedList);
-      setZebraStatus({ message: `프린터 ${formattedList.length}대 발견`, status: 'success' });
-    } else if (zebraLoaded) {
-      setZebraStatus({ message: '연결 테스트를 진행해주세요.', status: 'pending' });
-    }
-  }, [testResult, zebraLoading, zebraLoaded, zebraError]);
+  //   useEffect(() => {
+  //       loadLibrary();
+
+  //       testConnection();
+  //   }, [loadLibrary]);
 
   const setupSatoSocket = () => {
     if (socketRef.current && socketRef.current.readyState < 2) return;
@@ -203,7 +183,6 @@ function App() {
         "Method": "Driver.SendRawData",
         "Parameters": { "DriverName": printerInfo.driverName, "Data": base64Data }
       };
-      console.log(printJob);
       sendSatoJob(printJob);
     } else if (selectedPrinter.startsWith('ZEBRA_')) {
       let zplCommand = '';
@@ -284,11 +263,7 @@ function App() {
 
   useEffect(() => {
     setupSatoSocket();
-    // 페이지 로드 시 ZEBRA 라이브러리를 로드하고 바로 연결 테스트를 실행합니다.
-    loadLibrary().then(() => {
-        testConnection();
-    });
-    // getZebraPrinterList();
+    getZebraPrinterList();
 
     return () => {
       if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
@@ -307,7 +282,7 @@ function App() {
         setSelectedPrinter(combinedPrinters[0].value);
       }
     }
-  }, [satoPrinters, zebraPrinters, selectedPrinter]);
+  }, [satoPrinters, zebraPrinters]);
   
 
   return (
