@@ -1,5 +1,4 @@
 import React, { useEffect } from 'react';
-// import { useBrowserPrintLoader } from './common/printer/useBrowserPrintLoader';
 
 const PrinterStatus = ({
     loading,
@@ -14,8 +13,9 @@ const PrinterStatus = ({
     const containerStyle = {
         padding: '20px',
         maxWidth: '600px',
-        margin: '0 auto',
-        fontFamily: 'Arial, sans-serif'
+        margin: '20px auto',
+        fontFamily: 'Arial, sans-serif',
+        color: '#333' // 기본 텍스트 색상을 어둡게 변경
     };
 
     const cardStyle = {
@@ -23,11 +23,12 @@ const PrinterStatus = ({
         borderRadius: '8px',
         padding: '15px',
         margin: '10px 0',
-        backgroundColor: '#f9f9f9'
+        backgroundColor: '#f9f9f9',
+        textAlign: 'left'
     };
 
     const buttonStyle = {
-        padding: '10px, 20px',
+        padding: '10px 20px', // 쉼표 제거
         margin: '5px',
         border: 'none',
         borderRadius: '4px',
@@ -53,21 +54,52 @@ const PrinterStatus = ({
         color: 'black'
     };
 
+    // 로딩 중 카드 스타일
+    const loadingCardStyle = {
+        ...cardStyle,
+        backgroundColor: '#e3f2fd',
+        borderColor: '#90caf9'
+    };
+    
+    // 오류 카드 스타일
+    const errorCardStyle = {
+        ...cardStyle,
+        backgroundColor: '#ffebee',
+        borderColor: '#ef9a9a'
+    };
+
+    // 상세정보 div 스타일
+    const detailBoxStyle = {
+        backgroundColor: '#e8eaf6',
+        padding: '10px',
+        borderRadius: '4px',
+        marginTop: '5px',
+        fontSize: '12px',
+        fontFamily: 'monospace'
+    };
+
+    // 테스트 결과 카드 스타일
+    const testResultCardStyle = (success) => ({
+        ...cardStyle,
+        backgroundColor: success ? '#e8f5e9' : '#fff3e0',
+        borderColor: success ? '#a5d6a7' : '#ffcc80'
+    });
+
     return (
         <div style={containerStyle}>
             <h2>Remote App - BrowserPrint 상태</h2>
         
             {loading && (
-                <div style={{...cardStyle, backgroundColor: '#10151aff'}}>
+                <div style={loadingCardStyle}>
                     <strong> 처리 중...</strong>
                     <p>BrowserPrint 라이브러리를 로딩하거나 테스트 중입니다.</p>
                 </div>
             )}
 
             {error && (
-                <div style={{...cardStyle, backgroundColor: '#110f0fff', borderColor: '#f44336'}}>
+                <div style={errorCardStyle}>
                     <strong>오류 발생</strong>
-                    <p style={{coler: '#d32f2f'}}>{error}</p>
+                    <p style={{color: '#d32f2f'}}>{error}</p>
                     <button
                         style={warningButtonStyle}
                         onClick={loadLibrary}
@@ -81,26 +113,18 @@ const PrinterStatus = ({
                 <h3>라이브러리 상태</h3>
                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px'}}>
                     <div>
-                        <strong>상태:</strong>{loaded ? '로드됨' : '미로드'}
+                        <strong>상태:</strong> {loaded ? '로드됨' : '미로드'}
                     </div>
                     <div>
-                        <strong>로딩 중:</strong>{loading ? '예' : '아니요'}
+                        <strong>로딩 중:</strong> {loading ? '예' : '아니요'}
                     </div>
                 </div>
 
                 {loadStatus && (
                     <div style={{marginTop: '15px'}}>
                         <strong>상세 정보:</strong>
-                        <div style={{
-                            backgroundColor: '#0a0808ff',
-                            padding: '10px',
-                            borderRadius: '4px',
-                            marginTop: '5px',
-                            fontSize: '12px',
-                            fontFamily: 'monospace'
-                        }}>
+                        <div style={detailBoxStyle}>
                             <div> * 버전: {loadStatus.version}</div>
-                            
                         </div>
                     </div>
                 )}
@@ -108,10 +132,7 @@ const PrinterStatus = ({
         
 
             {testResult && (
-                <div style={{
-                    ...cardStyle,
-                    backgroundColor: testResult.success ? '#0c0e0cff' : '#13110dff'
-                }}>
+                <div style={testResultCardStyle(testResult.success)}>
                     <h3>연결 테스트 결과</h3>
                     <div>
                         <strong>결과: </strong>{testResult.success ? '성공' : '실패'}
@@ -125,7 +146,7 @@ const PrinterStatus = ({
                     {testResult.devices && testResult.devices.length > 0 && (
                         <div style={{marginTop: '10px'}}>
                             <strong>디바이스 목록: </strong>
-                            <ul style={{marginTop: '5px'}}>
+                            <ul style={{marginTop: '5px', paddingLeft: '20px'}}>
                                 {testResult.devices.map((device, index) => (
                                     <li key={index}>
                                         {device.name}
@@ -143,7 +164,7 @@ const PrinterStatus = ({
                     <button
                         style={primaryButtonStyle}
                         onClick={loadLibrary}
-                        // disabled={loading}
+                        disabled={loading}
                     >
                         {loaded ? '재로드' : '라이브러리 로드'}
                     </button>
@@ -151,7 +172,7 @@ const PrinterStatus = ({
                     <button
                         style={successButtonStyle}
                         onClick={testConnection}
-                        // disabled={loading || !loaded}
+                        disabled={loading || !loaded}
                     >
                         연결 테스트
                     </button>
@@ -159,7 +180,7 @@ const PrinterStatus = ({
                     <button
                         style={buttonStyle}
                         onClick={refreshStatus}
-                        // disabled={loading}
+                        disabled={loading}
                     >
                         상태 새로고침
                     </button>

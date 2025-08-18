@@ -42,8 +42,9 @@ function App() {
   
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [printQuantity, setPrintQuantity] = useState(1);
-  // const [qrData, setQrData] = useState('https://www.google.com'); // QR코드 데이터 상태 추가
-  const [qrData, setQrData] = '0123456789'; // QR코드 데이터 상태 추가
+  const [printText, setPrintText] = useState('');
+  const [hex, setHex] = useState('');
+  const [qrData, setQrData] = '0123456789'; 
   
   const [satoStatus, setSatoStatus] = useState({ message: '대기 중...', status: 'pending' });
   const [zebraStatus, setZebraStatus] = useState({ message: '대기 중...', status: 'pending' });
@@ -52,7 +53,6 @@ function App() {
   const zebraDeviceList = useRef([]);
   const pendingSatoPrintJob = useRef(null);
 
-  // ZEBRA 프린터 관련 상태와 함수를 App.js에서 직접 관리합니다.
   const {
       loading: zebraLoading,
       loaded: zebraLoaded,
@@ -64,30 +64,39 @@ function App() {
       refreshStatus
   } = useBrowserPrintLoader();
 
-  // ZEBRA 프린터 연결 테스트 결과가 변경될 때마다 프린터 목록을 업데이트합니다.
+  // ZEBRA 프린터 상태를 업데이트하는 useEffect
   useEffect(() => {
     if (zebraError) {
       setZebraStatus({ message: `오류: ${zebraError}`, status: 'error' });
-      return;
-    }
-    if (zebraLoading) {
-        setZebraStatus({ message: '프린터 확인 중...', status: 'pending' });
-        return;
-    }
-    if (testResult && testResult.devices) {
-      const deviceList = testResult.devices;
-      zebraDeviceList.current = deviceList;
-      const formattedList = deviceList.map(device => ({
-        value: `ZEBRA_${device.uid}`,
-        label: `ZEBRA: ${device.name}`,
-        uid: device.uid
-      }));
-      setZebraPrinters(formattedList);
-      setZebraStatus({ message: `프린터 ${formattedList.length}대 발견`, status: 'success' });
+    } else if (zebraLoading) {
+      setZebraStatus({ message: 'Zebra 프린터 확인 중...', status: 'pending' });
     } else if (zebraLoaded) {
-      setZebraStatus({ message: '연결 테스트를 진행해주세요.', status: 'pending' });
+      if (testResult) { // testResult가 있으면
+        if (testResult.success && Array.isArray(testResult.devices)) {
+          // 성공
+          const deviceList = testResult.devices;
+          zebraDeviceList.current = deviceList;
+          const formattedList = deviceList.map(device => ({
+            value: `ZEBRA_${device.uid}`,
+            label: `ZEBRA: ${device.name}`,
+            uid: device.uid
+          }));
+          setZebraPrinters(formattedList);
+          setZebraStatus({ message: `프린터 ${formattedList.length}대 발견`, status: 'success' });
+        } else {
+          // 테스트 실패
+          setZebraStatus({ message: `연결 실패: ${testResult.message}`, status: 'error' });
+        }
+      } else {
+        // 라이브러리는 로드되었지만 아직 테스트 결과는 없는 상태
+        setZebraStatus({ message: '라이브러리 로드 완료. 연결 테스트 중...', status: 'pending' });
+      }
+    } else {
+      // 초기 상태
+      setZebraStatus({ message: '대기 중...', status: 'pending' });
     }
-  }, [testResult, zebraLoading, zebraLoaded, zebraError]);
+  }, [zebraLoading, zebraLoaded, zebraError, testResult]);
+
 
   const setupSatoSocket = () => {
     if (socketRef.current && socketRef.current.readyState < 2) return;
@@ -151,33 +160,16 @@ function App() {
     };
   };
 
-  const getZebraPrinterList = () => {
-    setZebraStatus({ message: 'SDK 로드 확인 중...', status: 'pending' });
-    if (!window.BrowserPrint) {
-      console.warn("BrowserPrint SDK가 로드되지 않았습니다.");
-      setZebraStatus({ message: 'SDK를 찾을 수 없습니다.', status: 'error' });
-      return;
+  const encodingTest = (printText) => {
+    const Iconv = require('iconv-lite');
+    const tempText = '제조일자';
+    const buffer = Iconv.encode(tempText, 'euc-kr');
+    let hexString = '';
+    for (let i = 0; i < buffer.length; i++) {
+      hexString += buffer[i].toString(16).padStart(2, '0');
     }
-    
-    setZebraStatus({ message: '프린터 목록 요청 중...', status: 'pending' });
-    window.BrowserPrint.getLocalDevices(
-      (deviceList) => {
-        zebraDeviceList.current = deviceList;
-        const formattedList = deviceList.map(device => ({
-          value: `ZEBRA_${device.uid}`,
-          label: `ZEBRA: ${device.name}`,
-          uid: device.uid
-        }));
-        setZebraPrinters(formattedList);
-        setZebraStatus({ message: `프린터 ${formattedList.length}대 발견`, status: 'success' });
-      },
-      () => {
-        console.error("로컬 프린터를 가져오는 데 실패했습니다.");
-        setZebraStatus({ message: '프린터를 가져오는데 실패했습니다.', status: 'error' });
-      },
-      "printer"
-    );
-  };
+    setHex(hexString);
+  }
 
   const handlePrintTest = () => {
     const printerInfo = printers.find(p => p.value === selectedPrinter);
@@ -195,7 +187,6 @@ function App() {
       sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0120' + ESC + 'BG020501234567890';
       sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BD102050*1234567890*';
       sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BC02050101234567890';
-      // sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0200' + ESC + 'L0101' + ESC + 'P01' + ESC + 'K1B가나다';
       sbplCommand += ESC + `Q${printQuantity}`;
       sbplCommand += ESC + 'Z';
       const base64Data = btoa(sbplCommand);
@@ -224,19 +215,14 @@ function App() {
 
     if (selectedPrinter.startsWith('SATO_')) {
         const ESC = '\x1B';
-        // QR코드 SBPL 명령어: 2D30,모델,확대율,에러정정레벨,데이터
         let sbplCommand = '';
-        sbplCommand += ESC + 'A'; // 인쇄 시작
-        sbplCommand += ESC + 'A3H001V001'; // 인쇄 기준 위치 설정
-        sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890'; // 텍스트 인쇄
-        // sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `BQ2,M2,L,${qrData}`;
-        // sbplCommand += ESC + 'H0500' + ESC + 'V0120' + ESC + `2D30,L,02,0,${qrData.length}`;
-        sbplCommand += ESC + 'V0100' + ESC + 'H0500' + ESC + `2D20,2,003,081,123456789`;  //테스트 인쇄 성공.
+        sbplCommand += ESC + 'A'; 
+        sbplCommand += ESC + 'A3H001V001'; 
+        sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890'; 
+        sbplCommand += ESC + 'V0100' + ESC + 'H0500' + ESC + `2D20,2,003,081,123456789`;
         sbplCommand += ESC + `DS0010,${qrData}`;
-        // sbplCommand += ESC + `Q${printQuantity}`; // 인쇄 매수 설정
         sbplCommand += ESC + 'Q1';
-        sbplCommand += ESC + 'Z'; // 인쇄 종료
-        // let sbplCommand = `${ESC}A${ESC}H0100${ESC}V0100${ESC}BQ3010,112345${qrData}${ESC}Q${printQuantity}${ESC}Z`;
+        sbplCommand += ESC + 'Z';
         const base64Data = btoa(sbplCommand);
         const printJob = {
             "Method": "Driver.SendRawData",
@@ -244,13 +230,11 @@ function App() {
         };
         sendSatoJob(printJob);
     } else if (selectedPrinter.startsWith('ZEBRA_')) {
-        // QR코드 ZPL 명령어: ^BQN,2,크기^FD데이터^FS
         let zplCommand = '';
-        zplCommand += '^XA'; // 인쇄 시작
-        zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
-        zplCommand += `^FO50,50^BQN,2,4^FDQA,${qrData}^FS`; // 바코드
-        zplCommand += '^XZ'; // 인쇄 종료
-        // const zplData = `^XA^FO50,50^BQN,2,4^FDQA,${qrData}^FS^XZ`;
+        zplCommand += '^XA'; 
+        zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS';
+        zplCommand += `^FO50,50^BQN,2,4^FDQA,${qrData}^FS`;
+        zplCommand += '^XZ'; 
         sendZebraJob(zplCommand);
     }
   };
@@ -283,19 +267,21 @@ function App() {
   };
 
   useEffect(() => {
+    // 컴포넌트가 처음 마운트될 때 프린터 설정을 초기화합니다.
+    // SATO 프린터 소켓을 설정하고 ZEBRA 프린터 라이브러리를 로드합니다.
     setupSatoSocket();
-    // 페이지 로드 시 ZEBRA 라이브러리를 로드하고 바로 연결 테스트를 실행합니다.
     loadLibrary().then(() => {
         testConnection();
     });
-    // getZebraPrinterList();
 
     return () => {
-      if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
+      // 컴포넌트가 언마운트될 때 웹소켓 연결을 정리합니다.
+      if (socketRef.current && socketRef.current.readyState < 2) { // CONNECTING or OPEN
         socketRef.current.close();
       }
     };
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // 이 useEffect는 처음 렌더링 시 한 번만 실행됩니다.
 
   useEffect(() => {
     const combinedPrinters = [...satoPrinters, ...zebraPrinters];
@@ -309,6 +295,19 @@ function App() {
     }
   }, [satoPrinters, zebraPrinters, selectedPrinter]);
   
+  // 인쇄 버튼 스타일
+  const printButtonStyle = {
+    padding: '10px 20px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    border: 'none',
+    backgroundColor: '#28a745', // '연결 테스트' 버튼과 동일한 녹색
+    color: 'white',
+    fontSize: '16px'
+  };
+  const printTextChange = (event) => {
+    setPrintText(event.target.value);
+  };
 
   return (
     
@@ -343,74 +342,48 @@ function App() {
             min="1"
             style={{ padding: '8px', width: '80px', borderRadius: '4px' }}
           />
+          <input
+            type="text"
+            value={printText}
+            onChange={printTextChange}
+            style={{ padding: '8px', width: '80px', borderRadius: '4px' }}
+          />
+          <button 
+              onClick={encodingTest} 
+              style={printButtonStyle}
+            >
+              인코딩 테스트
+            </button>
+            <p>Hex: {hex}</p>
         </div>
-        {/* <div style={{ marginBottom: '20px', width: '300px' }}>
-            <label htmlFor="qrData" style={{ marginRight: '10px' }}>QR 데이터:</label>
-            <input
-                id="qrData"
-                type="text"
-                value={qrData}
-                onChange={(e) => setQrData(e.target.value)}
-                style={{ padding: '8px', width: '200px', borderRadius: '4px' }}
-            />
-        </div> */}
         <div style={{display: 'flex', gap: '10px'}}>
             <button 
               onClick={handlePrintTest} 
               disabled={!selectedPrinter}
-              style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#61dafb', color: '#282c34', fontSize: '16px' }}
+              style={printButtonStyle}
             >
               텍스트/바코드 테스트
             </button>
-            {<button 
+            <button 
               onClick={handlePrintQRTest} 
               disabled={!selectedPrinter}
-              style={{ padding: '10px 20px', cursor: 'pointer', borderRadius: '4px', border: 'none', backgroundColor: '#61dafb', color: '#282c34', fontSize: '16px' }}
+              style={printButtonStyle}
             >
               QR코드 테스트 인쇄
-            </button>}
+            </button>
         </div>
         
-        {/* <selectBox
-          placeholder={'바코드 유형 선택'}
-          showClearButton={true}
-          displayExpr='text'
-          valueExpr='value'
-          value={printState.barcdTypeCd}
-          items={[
-            {value: 'N', text: '일차원바코드'},
-            {value: 'QR', text: 'QR바코드'},
-          ]}
-          onValueChanged={(e) => {
-            setPrintState((prevState) => ({
-              ...prevState,
-              sizeCd: e.value,
-            }));
-          }}
-          />
-
-          <selectBox
-          placeholder={'사이즈 선택'}
-          displayExpr='text'
-          valueExpr='value'
-          value={printState.sizeCd}
-          items={[
-            {value: 'Normal', text: '일반1'},
-            {value: 'Normal', text: '일반2'},
-            {value: 'Normal', text: '일반3'},
-            {value: 'Small', text: '축약'},
-            {value: 'XSmall', text: '초소'},
-            {value: 'XXSmall', text: '극소'},
-          ]}
-          onValueChanged={(e) => {
-            setPrintState((prevState) => ({
-              ...prevState,
-              sizeCd: e.value,
-            }));
-          }}
-          /> */}
         <div>
-          <PrinterStatus />
+          <PrinterStatus
+            loading={zebraLoading}
+            loaded={zebraLoaded}
+            error={zebraError}
+            loadStatus={loadStatus}
+            testResult={testResult}
+            loadLibrary={loadLibrary}
+            testConnection={testConnection}
+            refreshStatus={refreshStatus}
+          />
         </div>
       </header>
     </div>

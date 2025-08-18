@@ -1,4 +1,4 @@
-public String convertedHan (String Hangle, String hanFont, String engFont, String Pitch, String strKind) {
+public String convertedHan (String Hangle, String hanFont, String engFont, String nPitch, String xstrKind) {
     String charHangule = null;                                      // 데이타파일에서 비교하기 위해 원은 1은자
     StringBuffer resultHangule = null;                              // .... Cenversion 한국 Hex:
     StringBuffer myString = new StringBuffer ();                    // Conversiong 한국 X값 계속 누적
@@ -7,8 +7,8 @@ public String convertedHan (String Hangle, String hanFont, String engFont, Strin
     byte [] by = null;                                              // 2바이트 문자의 바이트배열
     short hanst = 0;                                                // 2바이트 배열의 값이 short 로 변환된 값
     String hexStr = null;                                           // 0x7E7E 와의 논리급을 하고 대문자로 변환 2
-    String strangule = "ロL0101ロ";                                 // 한급일 경우
-    String strShift = ("".equals(nPitch) ? "" : nPitch + "ロ");     // 상위 비트를 마스크 시집•
+    String strangule = "L0101";                                 // 한급일 경우
+    String strShift = ("".equals(nPitch) ? "" : nPitch + "");     // 상위 비트를 마스크 시집•
 
     for (int ii = 0 ; ii< Hangle.length() ; ii++) {                   //한글자씩 포운..
         resultHangule = new StringBuffer ();
@@ -17,7 +17,7 @@ public String convertedHan (String Hangle, String hanFont, String engFont, Strin
         if (charHangule.hashCode () > 128) {                                    // 현재 문자가 한글인경우 if문으로
             by = charangule.getBytes();                                         // 2바이트 문자 바이트 배열로 변환
             hanst = byteToShort(by, 0);                                         // 바이트 배열값을 short 로 변환
-            hexStr = Integer.toHexString ((int)hanst&0x7E7F).toUpperCase();     // 0x7F7F 와의 논리곱을 하고 대문자로 변환 값
+            hexStr = Integer.toHexString ((int)hanst&0x7F7F).toUpperCase();     // 0x7F7F 와의 논리곱을 하고 대문자로 변환 값
 
             if (HanFlag) {
                 resultHangule.append(hexStr);
