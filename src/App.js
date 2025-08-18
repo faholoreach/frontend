@@ -43,6 +43,8 @@ function App() {
   const [selectedPrinter, setSelectedPrinter] = useState('');
   const [printQuantity, setPrintQuantity] = useState(1);
   const [printText, setPrintText] = useState('');
+  const [satoPrintCommend, setSatoPrintCommend] = useState('');
+  const [zebraPrintCommend, setZebraPrintCommend] = useState('');
   const [hex, setHex] = useState('');
   const [qrData, setQrData] = '0123456789'; 
   
@@ -162,16 +164,15 @@ function App() {
 
   const encodingTest = (printText) => {
     const Iconv = require('iconv-lite');
-    const tempText = '제조일자';
-    const buffer = Iconv.encode(tempText, 'euc-kr');
+    const buffer = Iconv.encode(printText, 'euc-kr');
     let hexString = '';
     for (let i = 0; i < buffer.length; i++) {
-      hexString += buffer[i].toString(16).padStart(2, '0');
+      hexString += buffer[i].toString(16).padStart(2, '0').toUpperCase();
     }
     setHex(hexString);
   }
 
-  const handlePrintTest = () => {
+  const handlePrintTest = (satoPrintCommend, zebraPrintCommend) => {
     const printerInfo = printers.find(p => p.value === selectedPrinter);
     if (!printerInfo) {
       alert("선택된 프린터 정보를 찾을 수 없습니다.");
@@ -181,14 +182,15 @@ function App() {
     if (selectedPrinter.startsWith('SATO_')) {
       const ESC = '\x1B';
       let sbplCommand = '';
-      sbplCommand += ESC + 'A';
-      sbplCommand += ESC + 'A3H001V001';
-      sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890';
-      sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0120' + ESC + 'BG020501234567890';
-      sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BD102050*1234567890*';
-      sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BC02050101234567890';
-      sbplCommand += ESC + `Q${printQuantity}`;
-      sbplCommand += ESC + 'Z';
+      // sbplCommand += ESC + 'A';
+      // sbplCommand += ESC + 'A3H001V001';
+      // sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0050' + ESC + 'L0101' + ESC + 'P01' + ESC + 'XM1234567890';
+      // sbplCommand += ESC + '%0' + ESC + 'H0500' + ESC + 'V0120' + ESC + 'BG020501234567890';
+      // sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BD102050*1234567890*';
+      // sbplCommand += ESC + '%0' + ESC + 'H0550' + ESC + 'V0170' + ESC + 'BC02050101234567890';
+      // sbplCommand += ESC + `Q${printQuantity}`;
+      // sbplCommand += ESC + 'Z';
+      sbplCommand = satoPrintCommend;
       const base64Data = btoa(sbplCommand);
       const printJob = {
         "Method": "Driver.SendRawData",
@@ -198,10 +200,11 @@ function App() {
       sendSatoJob(printJob);
     } else if (selectedPrinter.startsWith('ZEBRA_')) {
       let zplCommand = '';
-      zplCommand += '^XA'; // 인쇄 시작
-      zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
-      zplCommand += '^FO50,100^BY2^BCN,100,Y,N,N^FD1234567890^FS'; // 바코드
-      zplCommand += '^XZ'; // 인쇄 종료
+      // zplCommand += '^XA'; // 인쇄 시작
+      // zplCommand += '^FO50,50^A0N,28,28^FDZEBRA Print Test^FS'; // 텍스트
+      // zplCommand += '^FO50,100^BY2^BCN,100,Y,N,N^FD1234567890^FS'; // 바코드
+      // zplCommand += '^XZ'; // 인쇄 종료
+      zplCommand = zebraPrintCommend;
       sendZebraJob(zplCommand);
     }
   };
@@ -309,6 +312,14 @@ function App() {
     setPrintText(event.target.value);
   };
 
+  const satoPrintCommendChange = (event) => {
+    setSatoPrintCommend(event.target.value);
+  };
+
+  const zebraPrintCommendChange = (event) => {
+    setZebraPrintCommend(event.target.value);
+  };
+
   return (
     
     <div className="App">
@@ -349,16 +360,30 @@ function App() {
             style={{ padding: '8px', width: '80px', borderRadius: '4px' }}
           />
           <button 
-              onClick={encodingTest} 
+              onClick={() => encodingTest(printText)} 
               style={printButtonStyle}
             >
               인코딩 테스트
             </button>
             <p>Hex: {hex}</p>
         </div>
+        <p>Sato 출력 커멘드: </p>
+        <input
+            type="textarea"
+            value={satoPrintCommend}
+            onChange={satoPrintCommendChange}
+            style={{ padding: '8px', width: '800px', height: '50px', borderRadius: '4px' }}
+          />
+        <p>Zebra 출력 커멘드: </p>
+        <input
+            type="textarea"
+            value={zebraPrintCommend}
+            onChange={zebraPrintCommendChange}
+            style={{ padding: '8px', width: '800px', height: '50px', borderRadius: '4px' }}
+          />
         <div style={{display: 'flex', gap: '10px'}}>
             <button 
-              onClick={handlePrintTest} 
+              onClick={() => handlePrintTest(satoPrintCommend, zebraPrintCommend)} 
               disabled={!selectedPrinter}
               style={printButtonStyle}
             >
